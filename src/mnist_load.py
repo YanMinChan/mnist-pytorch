@@ -7,11 +7,12 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import time
 
 transform = transforms.Compose(
     [transforms.ToTensor(), transforms.Normalize((0.5, ), (0.5, ))])
 
-batch_size = 4
+batch_size = 1000
 
 trainset = torchvision.datasets.MNIST(root='./data', train=True,
                                       download=True, transform=transform)
@@ -46,19 +47,15 @@ class Net(nn.Module):
     def __init__(self):
         super().__init__()
         self.conv1 = nn.Conv2d(1, 6, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(16 * 4 * 4, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10)
+        self.pool = nn.MaxPool2d(3, 3)
+        self.fc1 = nn.Linear(6 * 8 * 8, 80)
+        self.fc2 = nn.Linear(80, 10)
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
         x = torch.flatten(x, 1)  # flatten all dimension except batch
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
+        x = F.tanh(self.fc1(x))
+        x = self.fc2(x)
         return x
 
 
@@ -66,13 +63,22 @@ net = Net()
 
 # Define loss function and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+optimizer = optim.SGD(net.parameters(), lr=0.100, momentum=0.9)
 
 # [[Network training]]
-# Train the network
-for epoch in range(2):
+# Select device (gpu if cuda is available)
+# device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+#
+# net.to(device)
 
-    running_loss = 0.0
+# Train the network
+num_epochs = 2
+
+start_time = time.time()
+for epoch in range(num_epochs):
+
+    correct = 0
+    loss = torch.tensor(0.0)
     for i, data in enumerate(trainloader, 0):
         # get the inputs; data is a list of [inputs, labels]
         inputs, labels = data
@@ -87,12 +93,17 @@ for epoch in range(2):
         optimizer.step()
 
         # print statistics
-        running_loss += loss.item()
-        if i % 2000 == 1999:
-            print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
-            running_loss = 0.0
+        _, predicted = torch.max(outputs, 1)
+        correct += (predicted == labels).sum().item()
 
-print('Finished Training')
+    accuracy = 100 * correct / len(trainset)
+    print(f'[{epoch + 1}/{num_epochs}] loss: {loss.item()
+          :.3f}, accuracy: {accuracy:.3f}')
+
+
+end_time = time.time()
+elapsed_time = end_time - start_time
+print(f'Finished Training.\nTime taken: {elapsed_time:.4f} seconds')
 
 PATH = './mnist_net.pth'
 torch.save(net.state_dict(), PATH)
